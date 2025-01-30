@@ -1,14 +1,48 @@
 #include<stdio.h>
 #include<ncurses.h>
 #include<string.h>
+#include<stdlib.h>
+#include<time.h>
 #define MAX 1000
 #define USERS "users.txt"
+#define SCORES "scores.txt"
+#define WALL '|'
+#define FLOOR '.'
+#define DOOR '+'
+#define CORRIDOR '#'
+#define PILLAR 'O'
+#define WINDOW '='
+#define EMPTY ' '
+#define HEIGHT 70
+#define WIDTH 70
+
+void init_colors() {
+    start_color();
+    init_pair(1, COLOR_MAGENTA, COLOR_BLACK);
+}
+
+typedef struct {
+    int x, y;     
+    int width, height;  
+} Room;
+
+typedef struct {
+    char username[MAX];
+    int total_score;
+    int gold;
+    int games_completed;
+    time_t first_game_time;
+    int x;
+    int y;
+    int health;
+} Player;
 
 typedef struct {
     char username[MAX];
     char password[MAX];
     char email[MAX];
 } User;
+
 
 int is_username_taken(const char* username) {
     FILE *file = fopen(USERS, "r");
@@ -141,9 +175,9 @@ int is_valid_user(const char* username, const char* password) {
     fclose(file);
     return 0;
 }
-void login_user(){
+void login_user(char user_name[MAX]){
     clear();
-    printw("Login\n");
+    printw("Login Menu\n");
     char username[MAX];
     char password[MAX];
     printw("ENTER USERNAME(or type guest to continue as a guest): \n");
@@ -168,51 +202,248 @@ void login_user(){
         scanf("%s", password);
     }
     printw("WELCOME, %s! PRESS ANY KEY TO RETURN TO THE MAIN MENU.\n", username);
+    strcpy(user_name, username);
     getch();
     return;
 }
-void game_menu(){
+
+char difficulty(){
+    char level;
+    clear();
+    printw("How difficult do you want the game to be? \nEnter 1, 2, 3 or 4. \n1 is the easiest level!\n");
+    scanw("%c", &level);
+    return level;
+}
+
+void Settings(char settingChoices[4]){
     int choice;
+    char setting_Choices[4];
+    do{
+    clear();
+    printw("1. Choose Color\n");
+    printw("2. Choose Difficulty Level\n");
+    printw("3. Choose Music\n");
+    printw("4. Back to Pre-Game Menu\n");
+    printw("Enter Your Choice: \n");
+    scanw("%d", &choice);
+
+    switch (choice)
+    {
+    /*case 1:
+        choose_color();
+        break;*/
+    case 2:
+        setting_Choices[1]=difficulty();
+        break;
+    /*case 3:
+        music();
+        break;*/
+    case 4:
+        return;
+    default:
+        printw("Invalid choice. Try again.\n");
+        getch();
+    }
+    } while(choice!=4);
+    strcpy(settingChoices, setting_Choices);
+    return;
+}
+void Scores(const char* current_user){
+    
+    clear();
+    FILE *file = fopen(SCORES, "r");
+    if (!file) {
+        printw("No Scores Available.\n");
+        getch();
+        return;
+    }
+    Player players[MAX];
+    int count = 0;
+
+    while (fscanf(file, "%s %d %d %d %ld", players[count].username, &players[count].total_score, 
+                  &players[count].gold, &players[count].games_completed, &players[count].first_game_time) != EOF) {
+        count++;
+    }
+    fclose(file);
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (players[i].total_score < players[j].total_score) {
+                Player temp = players[i];
+                players[i] = players[j];
+                players[j] = temp;
+            }
+        }
+    }
+    printw("Scoreboard\n");
+    printw("-----------------------------------------------------------------------------------\n");
+    printw("| Rank | Username         | Total Score | Gold       | Games | Experience          \n");
+    printw("-----------------------------------------------------------------------------------\n");
+    for (int i = 0; i < count; i++) {
+        char experience[MAX];
+        time_t now = time(NULL);
+        double experience_days = difftime(now, players[i].first_game_time) / (60 * 60 * 24);
+        snprintf(experience, MAX, "%.0f days", experience_days);
+
+        if (strcmp(players[i].username, current_user) == 0) {
+            attron(A_BOLD); 
+            attron(A_UNDERLINE);
+        }
+        if (i < 3) { 
+            attron(COLOR_PAIR(1));
+            attron(A_ITALIC);
+        }
+
+        printw("| %-4d | %-15s | %-11d | %-10d | %-5d | %-18s  \n", i + 1, players[i].username, 
+               players[i].total_score, players[i].gold, players[i].games_completed, experience);
+
+        if (i < 3) {
+            attroff(COLOR_PAIR(1)); 
+            attroff(A_ITALIC);
+        }
+        if (strcmp(players[i].username, current_user) == 0) {
+            attroff(A_BOLD); 
+            attroff(A_UNDERLINE);
+        }
+    }
+
+    printw("-----------------------------------------------------------------------------------\n");
+    printw("Press any key to return to the previous menu.\n");
+    getch();
+}
+
+int isOverlapping(Room room, Room rooms[], int count) {
+    for (int i = 0; i < count; i++) {
+        Room r = rooms[i];
+        if (!((room.x+room.width +5 < r.x && room.x<r.x) || (room.x > r.x && r.x + r.width +5 < room.x) || 
+            (room.y+room.height +5 < r.y && room.y<r.y) || (room.y > r.y && r.y + r.height +5 < room.y))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+Room createRandomRoom(int mapWidth, int mapHeight) {
+    Room room;
+    room.width = 4 + rand() % 5;  
+    room.height = 4 + rand() % 5; 
+    room.x = rand() % (mapWidth - room.width - 1); 
+    room.y = rand() % (mapHeight - room.height - 1); 
+    return room;
+}
+
+void drawRoom(char map[WIDTH][HEIGHT], Room room){
+    for(int i=0; i<room.width; i++){
+        for(int j=0; j<room.height; j++){
+            if(i==0 || i==room.width-1 || j==0 || j==room.height-1){
+                map[i+room.x][j+room.y]=WALL;
+            }
+            else {
+                map[i+room.x][j+room.y]=FLOOR;
+            }
+        }
+    }
+}
+
+void printMap(char map [WIDTH][HEIGHT]){
+    for(int i=0; i<WIDTH; i++){
+        for(int j=0; j<HEIGHT; j++){
+            
+            mvaddch(i, j, map[i][j]);
+        }
+        
+    }
+    refresh();
+}
+
+void generateMap(char map[WIDTH][HEIGHT], int roomCount) {
+    Room rooms[roomCount]; 
+    int createdRooms = 0;
+ 
+    for (int i = 0; i < WIDTH; i++) {
+        for (int j = 0; j < HEIGHT; j++) {
+            map[i][j] = EMPTY;
+        }
+    }
+
+    while (createdRooms < roomCount) {
+        Room newRoom = createRandomRoom(WIDTH, HEIGHT);
+        if (!isOverlapping(newRoom, rooms, createdRooms)) { 
+            rooms[createdRooms++] = newRoom; 
+            drawRoom(map, newRoom); 
+        }
+    }
+    
+    /*for (int i = 0; i < createdRooms - 1; i++) {
+        connectRooms(map, rooms[i], rooms[i + 1]);
+    }*/
+}
+
+void New_Game(int level){
+    clear();
+    srand(time(NULL));  
+    char map[WIDTH][HEIGHT];
+    int roomCount = 6+level;
+    generateMap(map, roomCount);
+    printMap(map);
+    refresh();
+    getch();
+}
+
+
+
+void game_menu(const char* current_user){
+    int choice;
+    char settingChoices[4];
+    
     do{
     clear();
     
-    printw("1. Start a New Game\n");
+    printw("1. New Game\n");
     printw("2. Settings\n");
-    printw("3. Scores\n");
+    printw("3. Scoreboard\n");
     printw("4. Profile\n");
-    printw("Enter your choice: ");
+    printw("5. Resume Game\n");
+    printw("6. Back to the main menu\n");
+    printw("Enter your choice: \n");
+    printw("(Choose the difficulty level in settings before starting a new game.)\n");
     scanw("%d", &choice);
 
     switch (choice) {
             case 1:
-                New_Game();
+                int level = 2;
+                New_Game(level);
                 break;
             case 2:
-                Settings();
+                Settings(settingChoices);
                 break;
             case 3:
-                Scores();
+                Scores(current_user);
                 break;
-            case 4:
+            /*case 4:
                 profile_menu();
                 break;
+            case 5:
+                Resume_Game();*/
+            case 6:
+                return;
             default:
                 printw("Invalid choice. Try again.\n");
                 getch();
     }
-    } while(choice != 4);
+    } while(choice != 6);
 }
 
-void main_menu(){
+void main_menu(char user_name[MAX]){
     int choice;
     do {
         clear();
         printw("Main Menu\n");
-        printw("1. Create New User\n");
-        printw("2. Login\n");
-        printw("3. Game Menu\n");
+        printw("1. Register Menu\n");
+        printw("2. Login Menu\n");
+        printw("3. Pre-Game Menu\n");
         printw("4. Exit\n");
-        printw("Enter your choice: ");
+        printw("Enter your choice: \n");
+        printw("\n(Login before going to the Pre-Game menu.)\n ");
         scanw("%d", &choice);
 
         switch (choice) {
@@ -220,10 +451,10 @@ void main_menu(){
                 create_user();
                 break;
             case 2:
-                login_user();
+                login_user(user_name);
                 break;
             case 3:
-                game_menu();
+                game_menu(user_name);
                 break;
             case 4:
                 return;
@@ -235,8 +466,10 @@ void main_menu(){
 }
 
 int main(){
+    char username[MAX];
     initscr();
-    main_menu();
+    init_colors();
+    main_menu(username);
     endwin();
     return 0;
 }
