@@ -2,6 +2,7 @@
 #include<ncurses.h>
 #include<string.h>
 #include<stdlib.h>
+#include<stdbool.h>
 #include<time.h>
 #define MAX 1000
 #define USERS "users.txt"
@@ -13,18 +14,46 @@
 #define PILLAR 'O'
 #define WINDOW '='
 #define EMPTY ' '
-#define HEIGHT 70
-#define WIDTH 70
+#define TRAP '^'
+#define STAIRCASE '<'
+#define HEIGHT 50
+#define WIDTH 100
+
+int visited[WIDTH][HEIGHT];
+int showFullMap = 0;
+
+int color=0;
+int floors=1;
 
 void init_colors() {
     start_color();
+    init_pair(0, COLOR_WHITE, COLOR_BLACK);
     init_pair(1, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(2, COLOR_GREEN, COLOR_BLACK);
+    init_pair(3, COLOR_RED, COLOR_BLACK);
+    init_pair(4, COLOR_YELLOW, COLOR_BLACK);
 }
 
 typedef struct {
     int x, y;     
-    int width, height;  
+    int width, height; 
+    int doorX, doorY; 
+    int trapX, trapY;
+    int windowX, windowY;
+    int pillarX, pillarY;
+    int stairX, stairY;
 } Room;
+ 
+ typedef struct {
+    int x;
+    int y;
+    bool active; 
+} Trap;
+
+#define MAX_TRAPS 100
+Trap traps[MAX_TRAPS];
+int trapCounter = 0;
+
 
 typedef struct {
     char username[MAX];
@@ -175,7 +204,7 @@ int is_valid_user(const char* username, const char* password) {
     fclose(file);
     return 0;
 }
-void login_user(char user_name[MAX]){
+void login_user(char user_name[MAX], Player * newplayer){
     clear();
     printw("Login Menu\n");
     char username[MAX];
@@ -203,21 +232,37 @@ void login_user(char user_name[MAX]){
     }
     printw("WELCOME, %s! PRESS ANY KEY TO RETURN TO THE MAIN MENU.\n", username);
     strcpy(user_name, username);
+    strcpy(newplayer->username, username);
     getch();
     return;
 }
 
-char difficulty(){
+void difficulty(char settingChoices[4]){
     char level;
     clear();
-    printw("How difficult do you want the game to be? \nEnter 1, 2, 3 or 4. \n1 is the easiest level!\n");
+    printw("How difficult would you like the game to be? \nEnter 1, 2, 3 or 4. \n1 is the easiest level!\n");
     scanw("%c", &level);
-    return level;
+    settingChoices[1]=level;
+    return;
+}
+
+void choose_color(){
+    clear();
+    int colornum;
+    printw("Choose the color you want for the player.\n");
+    printw("1. Magenta\n");
+    printw("2. Green\n");
+    printw("3. Red\n");
+    printw("4. Yellow\n");
+    printw("Enter your choice:\n");
+    printw("(Defult color is white.)\n");
+    scanw("%d", &colornum);
+    color=colornum;
 }
 
 void Settings(char settingChoices[4]){
     int choice;
-    char setting_Choices[4];
+    
     do{
     clear();
     printw("1. Choose Color\n");
@@ -229,11 +274,11 @@ void Settings(char settingChoices[4]){
 
     switch (choice)
     {
-    /*case 1:
+    case 1:
         choose_color();
-        break;*/
+        break;
     case 2:
-        setting_Choices[1]=difficulty();
+        difficulty(settingChoices);
         break;
     /*case 3:
         music();
@@ -245,7 +290,7 @@ void Settings(char settingChoices[4]){
         getch();
     }
     } while(choice!=4);
-    strcpy(settingChoices, setting_Choices);
+
     return;
 }
 void Scores(const char* current_user){
@@ -311,6 +356,9 @@ void Scores(const char* current_user){
     getch();
 }
 
+
+
+
 int isOverlapping(Room room, Room rooms[], int count) {
     for (int i = 0; i < count; i++) {
         Room r = rooms[i];
@@ -324,44 +372,135 @@ int isOverlapping(Room room, Room rooms[], int count) {
 
 Room createRandomRoom(int mapWidth, int mapHeight) {
     Room room;
-    room.width = 4 + rand() % 5;  
-    room.height = 4 + rand() % 5; 
-    room.x = rand() % (mapWidth - room.width - 1); 
-    room.y = rand() % (mapHeight - room.height - 1); 
+    room.width = 6 + rand() % 5;  
+    room.height = 6 + rand() % 5; 
+    room.x = 2 + rand() % (mapWidth - room.width - 3); 
+    room.y = 2 + rand() % (mapHeight - room.height - 3); 
     return room;
 }
 
-void drawRoom(char map[WIDTH][HEIGHT], Room room){
-    for(int i=0; i<room.width; i++){
-        for(int j=0; j<room.height; j++){
-            if(i==0 || i==room.width-1 || j==0 || j==room.height-1){
-                map[i+room.x][j+room.y]=WALL;
+void drawRoom(char map[WIDTH][HEIGHT], Room* room, Trap traps[], int roomNum){
+    for(int i=0; i<room->width; i++){
+        for(int j=0; j<room->height; j++){
+            if(i==0 || i==room->width-1 || j==0 || j==room->height-1){
+                map[i+room->x][j+room->y]=WALL;
             }
             else {
-                map[i+room.x][j+room.y]=FLOOR;
+                map[i+room->x][j+room->y]=FLOOR;
             }
         }
     }
-}
-
-void printMap(char map [WIDTH][HEIGHT]){
-    for(int i=0; i<WIDTH; i++){
-        for(int j=0; j<HEIGHT; j++){
-            
-            mvaddch(i, j, map[i][j]);
+    while(1){
+        room->doorX=room->x + rand() % (room->width);
+        room->doorY=room->y + rand() % (room->height);
+        if(map[room->doorX][room->doorY]==WALL){
+            map[room->doorX][room->doorY]=DOOR;
+            break;
+        }
+    }
+    if(roomNum==1 || roomNum==3 || roomNum==5 || roomNum==7 || roomNum==9){
+        while(1){
+        room->stairX=room->x + rand() % (room->width);
+        room->stairY=room->y + rand() % (room->height);
+        if(map[room->stairX][room->stairY]==WALL){
+            map[room->stairX][room->stairY]=STAIRCASE;
+            break;
+        }
+        }
+    }
+    int trapcount= rand()%2;
+    if(trapcount==1){
+        room->trapX=room->x+1+rand()%(room->width-2);
+        room->trapY=room->y+1+rand()%(room->height-2);
+        if(map[room->trapX][room->trapY]==FLOOR){
+        //map[room->trapX][room->trapY]=TRAP;
+        
+        traps[trapCounter].x = room->trapX;
+        traps[trapCounter].y = room->trapY;
+        traps[trapCounter].active = false; 
+        trapCounter++;
         }
         
     }
+    
+
+    int pillarcount= rand()%2;
+    //if(pillarcount==1){
+    while(pillarcount){
+        
+        room->pillarX=room->x+1+rand()%(room->width-2);
+        room->pillarY=room->y+1+rand()%(room->height-2);
+        
+        if(map[room->pillarX][room->pillarY]==FLOOR){
+        map[room->pillarX][room->pillarY]=PILLAR;
+        break;
+        }
+    }
+    //}
+    int windowcount=rand()%2;
+    //if(windowcount==1){
+    while(windowcount){
+        
+        room->windowX=room->x + rand() % (room->width);
+        room->windowY=room->y + rand() % (room->height);
+        if(map[room->windowX][room->windowY]==WALL){
+            map[room->windowX][room->windowY]=WINDOW;
+            break;
+        }
+    }
+    //}
+    
+    
+    
+}
+
+void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY){
+    for(int i=0; i<WIDTH; i++){
+        for(int j=0; j<HEIGHT; j++){
+            for (int t = 0; t < trapCounter; t++) {
+                if(traps[t].x == i && traps[t].y == j) {
+                    if (traps[t].active) {
+                        map[i][j] = TRAP; 
+                    }
+                    else {
+                        map[i][j] = FLOOR; 
+                    }
+                    break;
+                }
+            }
+            if (i == playerX && j == playerY) {
+                attron(COLOR_PAIR(color));
+                mvaddch(j, i, 'P'); 
+                attroff(COLOR_PAIR(color));
+            }
+            else if (visited[i][j] || showFullMap) {  
+                mvaddch(j, i, map[i][j]);
+            } else {
+                mvaddch(j, i, ' ');  
+            }
+        }
+        
+    }
+    for(int i=0; i<=WIDTH; i++){
+        mvaddch(HEIGHT, i, '_');
+    }
+    for(int j=0; j<=HEIGHT; j++){
+        mvaddch(j, WIDTH, '|');
+    }
+    move(1, WIDTH+2);
+    printw("Messages");
+    
     refresh();
 }
 
-void generateMap(char map[WIDTH][HEIGHT], int roomCount) {
-    Room rooms[roomCount]; 
+void generateMap(char map[WIDTH][HEIGHT], int roomCount, Player*newplayer, Room rooms[]) {
+    //Room rooms[roomCount]; 
     int createdRooms = 0;
  
     for (int i = 0; i < WIDTH; i++) {
         for (int j = 0; j < HEIGHT; j++) {
             map[i][j] = EMPTY;
+            visited[i][j] = 0;
         }
     }
 
@@ -369,29 +508,247 @@ void generateMap(char map[WIDTH][HEIGHT], int roomCount) {
         Room newRoom = createRandomRoom(WIDTH, HEIGHT);
         if (!isOverlapping(newRoom, rooms, createdRooms)) { 
             rooms[createdRooms++] = newRoom; 
-            drawRoom(map, newRoom); 
+            drawRoom(map, &newRoom, traps, createdRooms-1); 
         }
     }
+    Room room=rooms[0];
+    newplayer->x = room.x + room.width / 2;
+    newplayer->y = room.y + room.height / 2;
     
     /*for (int i = 0; i < createdRooms - 1; i++) {
         connectRooms(map, rooms[i], rooms[i + 1]);
     }*/
 }
 
-void New_Game(int level){
+void updateVisibility(int playerX, int playerY, Room rooms[], int roomCount) {
+    for (int i = 0; i < roomCount; i++) {
+        Room r = rooms[i];
+        if (playerX >= r.x && playerX < r.x + r.width &&
+            playerY >= r.y && playerY < r.y + r.height) {
+            for (int x = r.x; x < r.x + r.width; x++) {
+                for (int y = r.y; y < r.y + r.height; y++) {
+                    visited[x][y] = 1;
+                }
+            } 
+            return; 
+        }
+    }
+}
+
+void generateFloor(char map[WIDTH][HEIGHT], Room room, Player*newplayer, Room rooms[]){
+    int createdRooms=1;
+    for (int i = 0; i < WIDTH; i++) {
+        for (int j = 0; j < HEIGHT; j++) {
+            map[i][j] = EMPTY;
+            visited[i][j] = 0;
+        }
+    }
+
+    rooms[0].x=room.x;
+    rooms[0].y=room.y;
+    rooms[0].width=room.width;
+    rooms[0].height=room.height;
+    rooms[0].stairX=room.stairX;
+    rooms[0].stairY=room.stairY;
+
+    for(int i=room.x; i<room.x+room.width; i++){
+        for(int j=room.y; j<room.y+room.height; j++){
+            if(i==room.x || i==room.width-1+room.x || j==room.y || j==room.y+room.height-1){
+                map[i][j]=WALL;
+            }
+            else if(i==room.stairX && j==room.stairY){
+                map[i][j]='>';
+            }
+            else {
+                map[i][j]=FLOOR;
+            }
+            visited[i][j]=1;
+        }
+    }
+
+    while (createdRooms < 6) {
+        Room newRoom = createRandomRoom(WIDTH, HEIGHT);
+        if (!isOverlapping(newRoom, rooms, createdRooms)) { 
+            rooms[createdRooms++] = newRoom; 
+            drawRoom(map, &newRoom, traps, createdRooms-1); 
+        }
+    }
+    Room r0=rooms[0];
+            for(int i=r0.x; i<r0.x + r0.width; i++){
+                for(int j=r0.y; j<r0.y + r0.height; j++){
+                    visited[i][j]=1;
+                }
+            }
+    /*newplayer->x=room.stairX;
+    newplayer->y=room.stairY;
+    printMap(map, room.stairX, room.stairY);
+    refresh();*/
+    
+}
+
+
+void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[], int roomCount, Player*player) {
+    char ch;
+    
+    noecho();
+    while (1) {  
+        int newX = *playerX, newY = *playerY;
+        ch=getch();
+        int a=0;
+
+        switch (ch) {    
+            case '8':
+                newY--;
+                break;  
+            case '2':
+                newY++;
+                break; 
+            case '4':
+                newX--;
+                break;
+            case '6':
+                newX++;
+                break;
+            case '7': 
+                newX--;
+                newY--;
+                break;
+            case '9': 
+                newX++;
+                newY--;
+                break;
+            case '1': 
+                newX--;
+                newY++;
+                break;
+            case '3': 
+                newX++;
+                newY++;
+                break;
+            case 'q':
+            case 'Q':
+                return;
+            case 'm':
+            case 'M':
+                if(showFullMap){
+                    showFullMap=0;
+                }
+                else {
+                    showFullMap=1;
+                }
+                clear();
+                printMap(map, *playerX, *playerY);
+                refresh();
+                a=1;
+                break;
+        }
+        if(a){
+            //showFullMap=0;
+            continue;
+        }
+
+        if(map[newX][newY]==STAIRCASE && (map[*playerX][*playerY]==FLOOR || map[*playerX][*playerY]==TRAP)&&floors<=4){
+            
+            clear();
+            map[newX][newY]='>';
+            floors++;
+            Room templateRoom;
+            bool found = false;
+            for (int i = 0; i < roomCount; i++) {
+                if (newX >= rooms[i].x && newX < rooms[i].x + rooms[i].width &&
+                    newY >= rooms[i].y && newY < rooms[i].y + rooms[i].height) {
+                    templateRoom = rooms[i];
+                    found = true;
+                    break;
+                }
+            }
+            trapCounter=0;
+            generateFloor(map, templateRoom, player, rooms);
+            printMap(map, newX, newY);
+            
+            move(3, WIDTH+2);
+            attron(COLOR_PAIR(2));
+            printw("Welcome to the %dnd floor!", floors);
+            attroff(COLOR_PAIR(2));
+            refresh();
+            continue;
+        }
+
+        else if(map[newX][newY]==STAIRCASE && (map[*playerX][*playerY]==FLOOR || map[*playerX][*playerY]==TRAP)&&floors>4){
+            attron(COLOR_PAIR(3));
+            printw("No more floors!");
+            attroff(COLOR_PAIR(3));
+            continue;
+        }
+
+        
+        if (map[newX][newY] == FLOOR || map[newX][newY] == EMPTY || map[newX][newY] == DOOR || map[newX][newY]==TRAP) {
+            *playerX = newX;
+            *playerY = newY;
+            updateVisibility(*playerX, *playerY, rooms, roomCount);
+        }
+        clear();
+        for (int t = 0; t < trapCounter; t++) {
+            if (traps[t].x == newX && traps[t].y == newY) {
+        
+                traps[t].active = true;
+                player->health --;
+                move(3, WIDTH+2);
+                attron(COLOR_PAIR(3));
+                printw("Oops! You hit a trap...Your current health is %d.", player->health);
+                attroff(COLOR_PAIR(3));
+            }
+        }
+
+        
+        printMap(map, newX, newY);
+        refresh();
+    }
+    echo();
+}
+
+void New_Game(char level, Player*newplayer){
     clear();
+    int levelnum;
+    if(level=='1'){
+        levelnum=1;
+    }
+    if(level=='2'){
+        levelnum=2;
+    }
+    if(level=='3'){
+        levelnum=3;
+    }
+    if(level=='4'){
+        levelnum=4;
+    }
+    else {
+        levelnum=1;
+    }
     srand(time(NULL));  
     char map[WIDTH][HEIGHT];
-    int roomCount = 6+level;
-    generateMap(map, roomCount);
-    printMap(map);
+    int roomCount = 6+levelnum;
+    Room rooms[roomCount];
+    trapCounter=0;
+    generateMap(map, roomCount, newplayer, rooms);
+    Room r0=rooms[0];
+    for(int i=r0.x; i<r0.x + r0.width; i++){
+        for(int j=r0.y; j<r0.y + r0.height; j++){
+            visited[i][j]=1;
+        }
+    }
+    printMap(map, newplayer->x, newplayer->y);
+    
+    
+    movePlayer(&newplayer->x, &newplayer->y, map, rooms, roomCount, newplayer);
+    echo();
     refresh();
     getch();
 }
 
 
 
-void game_menu(const char* current_user){
+void game_menu(const char* current_user, Player*newplayer){
     int choice;
     char settingChoices[4];
     
@@ -410,8 +767,9 @@ void game_menu(const char* current_user){
 
     switch (choice) {
             case 1:
-                int level = 2;
-                New_Game(level);
+            showFullMap=0;
+                char level = settingChoices[1];
+                New_Game(level, newplayer);
                 break;
             case 2:
                 Settings(settingChoices);
@@ -434,6 +792,8 @@ void game_menu(const char* current_user){
 }
 
 void main_menu(char user_name[MAX]){
+    Player *newplayer=(Player*)malloc(sizeof(Player));
+    newplayer->health=10;
     int choice;
     do {
         clear();
@@ -451,23 +811,27 @@ void main_menu(char user_name[MAX]){
                 create_user();
                 break;
             case 2:
-                login_user(user_name);
+                login_user(user_name, newplayer);
                 break;
             case 3:
-                game_menu(user_name);
+                color=0;
+                game_menu(user_name, newplayer);
                 break;
             case 4:
+                free(newplayer);
                 return;
             default:
                 printw("Invalid choice. Try again.\n");
                 getch();
         }
     } while (choice != 4);
+
 }
 
 int main(){
     char username[MAX];
     initscr();
+    curs_set(0);
     init_colors();
     main_menu(username);
     endwin();
