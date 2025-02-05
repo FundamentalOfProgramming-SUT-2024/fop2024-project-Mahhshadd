@@ -42,6 +42,8 @@ typedef struct {
     int windowX, windowY;
     int pillarX, pillarY;
     int stairX, stairY;
+    int sdoorX, sdoorY;
+    bool sdoorfound;
 } Room;
  
  typedef struct {
@@ -454,7 +456,7 @@ void drawRoom(char map[WIDTH][HEIGHT], Room* room, Trap traps[], int roomNum){
     
 }
 
-void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY){
+void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY, Room rooms[]){
     for(int i=0; i<WIDTH; i++){
         for(int j=0; j<HEIGHT; j++){
             for (int t = 0; t < trapCounter; t++) {
@@ -468,11 +470,15 @@ void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY){
                     break;
                 }
             }
-            if (i == playerX && j == playerY) {
+            if(i == rooms[0].sdoorX && j == rooms[0].sdoorY && rooms[0].sdoorfound == false && floors>1) {
+                mvaddch(j, i, WALL); 
+            }
+            else if (i == playerX && j == playerY) {
                 attron(COLOR_PAIR(color));
                 mvaddch(j, i, 'P'); 
                 attroff(COLOR_PAIR(color));
             }
+            
             else if (visited[i][j] || showFullMap) {  
                 mvaddch(j, i, map[i][j]);
             } else {
@@ -550,6 +556,7 @@ void generateFloor(char map[WIDTH][HEIGHT], Room room, Player*newplayer, Room ro
     rooms[0].height=room.height;
     rooms[0].stairX=room.stairX;
     rooms[0].stairY=room.stairY;
+       
 
     for(int i=room.x; i<room.x+room.width; i++){
         for(int j=room.y; j<room.y+room.height; j++){
@@ -565,6 +572,7 @@ void generateFloor(char map[WIDTH][HEIGHT], Room room, Player*newplayer, Room ro
             visited[i][j]=1;
         }
     }
+
 
     while (createdRooms < 6) {
         Room newRoom = createRandomRoom(WIDTH, HEIGHT);
@@ -637,7 +645,7 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
                     showFullMap=1;
                 }
                 clear();
-                printMap(map, *playerX, *playerY);
+                printMap(map, *playerX, *playerY, rooms);
                 refresh();
                 a=1;
                 break;
@@ -647,10 +655,31 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
             continue;
         }
 
+        if(map[newX][newY]==WALL){
+            continue;
+        }
+
+        /*if(floors>1 && newX == rooms[0].sdoorX && newY == rooms[0].sdoorY) {
+            rooms[0].sdoorfound = true;
+            map[newX][newY] = DOOR; 
+           *playerX = newX;
+           *playerY = newY;
+            updateVisibility(*playerX, *playerY, rooms, roomCount);
+            clear();
+            printMap(map, *playerX, *playerY, rooms);
+            move(3, WIDTH+2);
+            attron(COLOR_PAIR(2));
+            printw("Secret door discovered!");
+            attroff(COLOR_PAIR(2));
+            refresh();
+            continue;
+        }*/
+
+
         if(map[newX][newY]==STAIRCASE && (map[*playerX][*playerY]==FLOOR || map[*playerX][*playerY]==TRAP)&&floors<=4){
             
             clear();
-            map[newX][newY]='>';
+            
             floors++;
             Room templateRoom;
             bool found = false;
@@ -664,7 +693,8 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
             }
             trapCounter=0;
             generateFloor(map, templateRoom, player, rooms);
-            printMap(map, newX, newY);
+            map[newX][newY]='>';
+            printMap(map, newX, newY, rooms);
             
             move(3, WIDTH+2);
             attron(COLOR_PAIR(2));
@@ -682,7 +712,7 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
         }
 
         
-        if (map[newX][newY] == FLOOR || map[newX][newY] == EMPTY || map[newX][newY] == DOOR || map[newX][newY]==TRAP) {
+        if ((map[newX][newY] == FLOOR || map[newX][newY] == EMPTY || map[newX][newY] == DOOR || map[newX][newY]==TRAP)&&map[newX][newY]!=WALL) {
             *playerX = newX;
             *playerY = newY;
             updateVisibility(*playerX, *playerY, rooms, roomCount);
@@ -701,7 +731,7 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
         }
 
         
-        printMap(map, newX, newY);
+        printMap(map, newX, newY, rooms);
         refresh();
     }
     echo();
@@ -737,7 +767,7 @@ void New_Game(char level, Player*newplayer){
             visited[i][j]=1;
         }
     }
-    printMap(map, newplayer->x, newplayer->y);
+    printMap(map, newplayer->x, newplayer->y, rooms);
     
     
     movePlayer(&newplayer->x, &newplayer->y, map, rooms, roomCount, newplayer);
