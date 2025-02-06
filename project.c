@@ -1,5 +1,8 @@
 #include<stdio.h>
+#include <ncursesw/ncurses.h>
 #include<ncurses.h>
+#include <locale.h>
+#include <wchar.h>
 #include<string.h>
 #include<stdlib.h>
 #include<stdbool.h>
@@ -18,6 +21,11 @@
 #define STAIRCASE '<'
 #define HEIGHT 50
 #define WIDTH 100
+#define FOOD '@'
+#define GOLD '$'
+#define HEALTH '&'
+#define DAMAGE '%'
+#define SPEED '!'
 
 int visited[WIDTH][HEIGHT];
 int showFullMap = 0;
@@ -32,7 +40,16 @@ void init_colors() {
     init_pair(2, COLOR_GREEN, COLOR_BLACK);
     init_pair(3, COLOR_RED, COLOR_BLACK);
     init_pair(4, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(5, COLOR_BLUE, COLOR_BLACK);
+    init_pair(6, COLOR_CYAN, COLOR_BLACK);
+    
 }
+
+typedef enum {
+    NORMAL,
+    ENCHANT,
+    TREASURE
+} RoomType;
 
 typedef struct {
     int x, y;     
@@ -44,6 +61,8 @@ typedef struct {
     int stairX, stairY;
     int sdoorX, sdoorY;
     bool sdoorfound;
+    
+    RoomType type;
 } Room;
  
  typedef struct {
@@ -66,6 +85,9 @@ typedef struct {
     int x;
     int y;
     int health;
+    int thealth, tspeed, tdamage;
+    int sword, dagger, arrow, mace, wand;
+    int food;
 } Player;
 
 typedef struct {
@@ -382,6 +404,17 @@ Room createRandomRoom(int mapWidth, int mapHeight) {
 }
 
 void drawRoom(char map[WIDTH][HEIGHT], Room* room, Trap traps[], int roomNum){
+    /*switch(room->type) {
+        case NORMAL:
+            attron(COLOR_PAIR(2));
+            break;
+        case ENCHANT:
+            attron(COLOR_PAIR(4));
+            break;
+        case TREASURE:
+            attron(COLOR_PAIR(3));
+            break;
+    }*/
     for(int i=0; i<room->width; i++){
         for(int j=0; j<room->height; j++){
             if(i==0 || i==room->width-1 || j==0 || j==room->height-1){
@@ -402,12 +435,18 @@ void drawRoom(char map[WIDTH][HEIGHT], Room* room, Trap traps[], int roomNum){
     }
     if(roomNum==1 || roomNum==3 || roomNum==5 || roomNum==7 || roomNum==9){
         while(1){
-        room->stairX=room->x + rand() % (room->width);
-        room->stairY=room->y + rand() % (room->height);
-        if(map[room->stairX][room->stairY]==WALL){
-            map[room->stairX][room->stairY]=STAIRCASE;
+        if(floors!=4){
+            room->stairX=room->x + rand() % (room->width);
+            room->stairY=room->y + rand() % (room->height);
+            if(map[room->stairX][room->stairY]==WALL){
+                map[room->stairX][room->stairY]=STAIRCASE;
+                break;
+            }
+        }
+        else{
             break;
         }
+        
         }
     }
     int trapcount= rand()%2;
@@ -450,13 +489,26 @@ void drawRoom(char map[WIDTH][HEIGHT], Room* room, Trap traps[], int roomNum){
             break;
         }
     }
-    //}
+
     
+    
+    //}
+    /*switch(room->type) {
+        case NORMAL:
+            attron(COLOR_PAIR(2));
+            break;
+        case ENCHANT:
+            attron(COLOR_PAIR(4));
+            break;
+        case TREASURE:
+            attron(COLOR_PAIR(3));
+            break;
+    }*/
     
     
 }
 
-void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY, Room rooms[]){
+void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY, Room rooms[], int roomCount, Player*player){
     for(int i=0; i<WIDTH; i++){
         for(int j=0; j<HEIGHT; j++){
             for (int t = 0; t < trapCounter; t++) {
@@ -470,20 +522,90 @@ void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY, Room rooms[]){
                     break;
                 }
             }
-            if(i == rooms[0].sdoorX && j == rooms[0].sdoorY && rooms[0].sdoorfound == false && floors>1) {
+            /*if(i == rooms[0].sdoorX && j == rooms[0].sdoorY && rooms[0].sdoorfound == false && floors>1) {
                 mvaddch(j, i, WALL); 
-            }
-            else if (i == playerX && j == playerY) {
+            }*/
+            if (i == playerX && j == playerY) {
                 attron(COLOR_PAIR(color));
                 mvaddch(j, i, 'P'); 
                 attroff(COLOR_PAIR(color));
             }
+
             
-            else if (visited[i][j] || showFullMap) {  
+            
+            else if (visited[i][j] || showFullMap) { 
+                if(map[i][j]==FOOD){
+                    attron(COLOR_PAIR(6));
+                    mvaddch(j, i, map[i][j]);
+                    attroff(COLOR_PAIR(6));
+                    continue;
+                }
+                else if(map[i][j]==GOLD){
+                    attron(COLOR_PAIR(4));
+                    mvaddch(j, i, map[i][j]);
+                    attroff(COLOR_PAIR(4));
+                    continue;
+                }
+                else if(map[i][j]==DAMAGE || map[i][j]==SPEED || map[i][j]==HEALTH){
+                    attron(COLOR_PAIR(3));
+                    mvaddch(j, i, map[i][j]);
+                    attroff(COLOR_PAIR(3));
+                    continue;
+                }
+                else if(map[i][j]=='M' || map[i][j]=='A' || map[i][j]=='W'|| map[i][j]=='S'|| map[i][j]=='D'){
+                    attron(COLOR_PAIR(0));
+                    mvaddch(j, i, map[i][j]);
+                    attroff(COLOR_PAIR(0));
+                    continue;
+                }
+                else if(map[i][j]=='U' || map[i][j]=='F' || map[i][j]=='g'|| map[i][j]=='s'|| map[i][j]=='d'){
+                    attron(COLOR_PAIR(5));
+                    mvaddch(j, i, map[i][j]);
+                    attroff(COLOR_PAIR(5));
+                    continue;
+                }
+                else if(map[i][j]=='G'){
+                    attron(COLOR_PAIR(1));
+                    mvaddch(j, i, map[i][j]);
+                    attroff(COLOR_PAIR(1));
+                    continue;
+                }
+                int cellcolor; 
+                for(int r=0; r<roomCount; r++){
+                    if (i >= rooms[r].x && i < rooms[r].x + rooms[r].width &&
+                        j >= rooms[r].y && j < rooms[r].y + rooms[r].height){
+                    switch (rooms[r].type){
+                        case  NORMAL:
+                        attron(COLOR_PAIR(2));
+                        cellcolor=2;
+                        break;
+                        case ENCHANT:
+                        attron(COLOR_PAIR(4));
+                        cellcolor=4;
+                        break;
+                        case TREASURE:
+                        attron(COLOR_PAIR(3));
+                        cellcolor=3;
+                        break;
+                    }
+                    }
+                }
                 mvaddch(j, i, map[i][j]);
+                switch (cellcolor){
+                        case  2:
+                        attroff(COLOR_PAIR(2));
+                        break;
+                        case 4:
+                        attroff(COLOR_PAIR(4));
+                        break;
+                        case 3:
+                        attroff(COLOR_PAIR(3));
+                        break;
+                }
             } else {
                 mvaddch(j, i, ' ');  
             }
+            
         }
         
     }
@@ -495,7 +617,10 @@ void printMap(char map [WIDTH][HEIGHT], int playerX, int playerY, Room rooms[]){
     }
     move(1, WIDTH+2);
     printw("Messages");
-    
+    move(10, WIDTH+2);
+    printw("Golds: %d", player->gold);
+    move(19, WIDTH+2);
+    printw("Health: %d", player->health);
     refresh();
 }
 
@@ -510,6 +635,8 @@ void generateMap(char map[WIDTH][HEIGHT], int roomCount, Player*newplayer, Room 
         }
     }
 
+    
+
     while (createdRooms < roomCount) {
         Room newRoom = createRandomRoom(WIDTH, HEIGHT);
         if (!isOverlapping(newRoom, rooms, createdRooms)) { 
@@ -517,6 +644,251 @@ void generateMap(char map[WIDTH][HEIGHT], int roomCount, Player*newplayer, Room 
             drawRoom(map, &newRoom, traps, createdRooms-1); 
         }
     }
+
+    for(int i=0; i<roomCount; i++){
+        rooms[i].type=0;
+    }
+    rooms[3].type=1;
+
+    for(int i=0; i<roomCount; i++){
+        if(rooms[i].type==0){
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+        if(map[x][y]==FLOOR){
+            map[x][y]=FOOD;
+            break;
+        }
+        }
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+        if(map[x][y]==FLOOR){
+            map[x][y]=GOLD;
+            break;
+        }
+        }
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+        if(map[x][y]==FLOOR){
+            int t=rand()%3;
+            switch (t)
+            {
+            case 0:
+                map[x][y]=DAMAGE;
+                break;
+            
+            case 1:
+                map[x][y]=HEALTH;
+                break;
+            case 2:
+                map[x][y]=SPEED;
+                break;
+            }
+            break;
+        }
+        }
+
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+        if(map[x][y]==FLOOR){
+            int t=rand()%5;
+            switch (t)
+            {
+            case 0:
+                map[x][y]='D';
+                break;
+            
+            case 1:
+                map[x][y]='M';
+                break;
+            case 2:
+                map[x][y]='W';
+                break;
+            case 3:
+                map[x][y]='A';
+                break;
+            case 4:
+                map[x][y]='S';
+                break;
+            }
+
+            break;
+        }
+        }
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+        for(int j=0; j<trapCounter; j++){
+            if(x==traps[j].x && y==traps[j].y){
+                n=1;
+                break;
+            }
+        }
+        if(n){
+           continue;
+        }
+        if(map[x][y]==FLOOR){
+            int t=rand()%5;
+            switch (t)
+            {
+            case 0:
+                map[x][y]='d';
+                break;
+            
+            case 1:
+                map[x][y]='U';
+                break;
+            case 2:
+                map[x][y]='g';
+                break;
+            case 3:
+                map[x][y]='F';
+                break;
+            case 4:
+                map[x][y]='s';
+                break;
+            }
+
+            break;
+        }
+        }
+        }
+
+        else if(rooms[i].type==1){
+            int tcounter=0;
+            while(tcounter<6){
+                int x=rooms[i].x + rand()%(rooms[i].width);
+                int y=rooms[i].y + rand()%(rooms[i].height);
+                int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+                if(map[x][y]==FLOOR){
+                    int t=rand()%3;
+                    switch (t)
+                    {
+                    case 0:
+                    map[x][y]=DAMAGE;
+                    break;
+                    case 1:
+                    map[x][y]=HEALTH;
+                    break;
+                    case 2:
+                    map[x][y]=SPEED;
+                    break;
+                    }
+                    tcounter++;
+                }
+            }
+            while(1){
+                int x=rooms[i].x + rand()%(rooms[i].width);
+                int y=rooms[i].y + rand()%(rooms[i].height);
+                int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+                if(map[x][y]==FLOOR){
+                    map[x][y]='G';
+                    break;
+                }
+            }
+            while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+        for(int j=0; j<trapCounter; j++){
+            if(x==traps[j].x && y==traps[j].y){
+                n=1;
+                break;
+            }
+        }
+        if(n){
+           continue;
+        }
+        if(map[x][y]==FLOOR){
+            int t=rand()%5;
+            switch (t)
+            {
+            case 0:
+                map[x][y]='d';
+                break;
+            
+            case 1:
+                map[x][y]='U';
+                break;
+            case 2:
+                map[x][y]='g';
+                break;
+            case 3:
+                map[x][y]='F';
+                break;
+            case 4:
+                map[x][y]='s';
+                break;
+            }
+
+            break;
+        }
+        }
+        }
+    }
+    
     Room room=rooms[0];
     newplayer->x = room.x + room.width / 2;
     newplayer->y = room.y + room.height / 2;
@@ -572,6 +944,7 @@ void generateFloor(char map[WIDTH][HEIGHT], Room room, Player*newplayer, Room ro
             visited[i][j]=1;
         }
     }
+    
 
 
     while (createdRooms < 6) {
@@ -581,6 +954,267 @@ void generateFloor(char map[WIDTH][HEIGHT], Room room, Player*newplayer, Room ro
             drawRoom(map, &newRoom, traps, createdRooms-1); 
         }
     }
+
+    if(floors==4){
+        int treasure=1+rand()%5;
+        rooms[treasure].type=2;
+        for(int i=1; i<6; i++){
+            if(i==treasure){
+                continue;
+            }
+            else{
+                rooms[i].type=0;
+            }
+        }
+    }
+    else {
+        for(int i=1; i<6; i++){
+            rooms[i].type=0;
+        }
+        rooms[2].type=1;
+    }
+    rooms[0].type=1;
+
+    for(int i=0; i<6; i++){
+        if(rooms[i].type==0){
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+        if(map[x][y]==FLOOR){
+            map[x][y]=FOOD;
+            break;
+        }
+        }
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+        if(map[x][y]==FLOOR){
+            map[x][y]=GOLD;
+            break;
+        }
+        }
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+        if(map[x][y]==FLOOR){
+            int t=rand()%3;
+            switch (t)
+            {
+            case 0:
+                map[x][y]=DAMAGE;
+                break;
+            
+            case 1:
+                map[x][y]=HEALTH;
+                break;
+            case 2:
+                map[x][y]=SPEED;
+                break;
+            }
+            break;
+        }
+        }
+
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+        for(int j=0; j<trapCounter; j++){
+            if(x==traps[j].x && y==traps[j].y){
+                n=1;
+                break;
+            }
+        }
+        if(n){
+           continue;
+        }
+        if(map[x][y]==FLOOR){
+            int t=rand()%5;
+            switch (t)
+            {
+            case 0:
+                map[x][y]='D';
+                break;
+            
+            case 1:
+                map[x][y]='M';
+                break;
+            case 2:
+                map[x][y]='W';
+                break;
+            case 3:
+                map[x][y]='A';
+                break;
+            case 4:
+                map[x][y]='S';
+                break;
+            }
+
+            break;
+        }
+        }
+        while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+        for(int j=0; j<trapCounter; j++){
+            if(x==traps[j].x && y==traps[j].y){
+                n=1;
+                break;
+            }
+        }
+        if(n){
+           continue;
+        }
+        if(map[x][y]==FLOOR){
+            int t=rand()%5;
+            switch (t)
+            {
+            case 0:
+                map[x][y]='d';
+                break;
+            
+            case 1:
+                map[x][y]='U';
+                break;
+            case 2:
+                map[x][y]='g';
+                break;
+            case 3:
+                map[x][y]='F';
+                break;
+            case 4:
+                map[x][y]='s';
+                break;
+            }
+
+            break;
+        }
+        }
+        }
+        else if(rooms[i].type==1){
+            int tcounter=0;
+            while(tcounter<6){
+                int x=rooms[i].x + rand()%(rooms[i].width);
+                int y=rooms[i].y + rand()%(rooms[i].height);
+                int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+                if(map[x][y]==FLOOR){
+                    int t=rand()%3;
+                    switch (t)
+                    {
+                    case 0:
+                    map[x][y]=DAMAGE;
+                    break;
+            
+                    case 1:
+                    map[x][y]=HEALTH;
+                    break;
+                    case 2:
+                    map[x][y]=SPEED;
+                    break;
+                    }
+                    tcounter++;
+                }
+            }
+            while(1){
+                
+                int x=rooms[i].x + rand()%(rooms[i].width);
+                int y=rooms[i].y + rand()%(rooms[i].height);
+                int n=0;
+                for(int j=0; j<trapCounter; j++){
+                    if(x==traps[j].x && y==traps[j].y){
+                        n=1;
+                        break;
+                    }
+                }
+                if(n){
+                    continue;
+                }
+                if(map[x][y]==FLOOR){
+                    map[x][y]='G';
+                    break;
+                }
+            }
+            while(1){
+        int x=rooms[i].x + rand()%(rooms[i].width);
+        int y=rooms[i].y + rand()%(rooms[i].height);
+        int n=0;
+        for(int j=0; j<trapCounter; j++){
+            if(x==traps[j].x && y==traps[j].y){
+                n=1;
+                break;
+            }
+        }
+        if(n){
+           continue;
+        }
+        if(map[x][y]==FLOOR){
+            int t=rand()%5;
+            switch (t)
+            {
+            case 0:
+                map[x][y]='d';
+                break;
+            
+            case 1:
+                map[x][y]='U';
+                break;
+            case 2:
+                map[x][y]='g';
+                break;
+            case 3:
+                map[x][y]='F';
+                break;
+            case 4:
+                map[x][y]='s';
+                break;
+            }
+
+            break;
+        }
+        }
+        }
+    }
+    
     Room r0=rooms[0];
             for(int i=r0.x; i<r0.x + r0.width; i++){
                 for(int j=r0.y; j<r0.y + r0.height; j++){
@@ -593,6 +1227,182 @@ void generateFloor(char map[WIDTH][HEIGHT], Room room, Player*newplayer, Room ro
     refresh();*/
     
 }
+
+void winendgame(Player*player){
+    clear();
+    player->total_score=player->gold * 10;
+    attron(COLOR_PAIR(2));
+    move(1, 1);
+    printw("Congrajulations....You reached to the treasure room!");
+    move(2, 1);
+    printw("Gold: %d", player->gold);
+    move(3, 1);
+    printw("Total score: %d", player->total_score);
+    attroff(COLOR_PAIR(2));
+
+    FILE *file = fopen(SCORES, "r");
+    
+    Player players[MAX];
+    int count = 0;
+    int n;
+
+    while (fscanf(file, "%s %d %d %d %ld", players[count].username, &players[count].total_score, 
+                  &players[count].gold, &players[count].games_completed, &players[count].first_game_time) != EOF) {
+        count++;
+        if(strcmp(player->username, players[count-1].username)==0){
+           n=count-1;
+        }
+    }
+    fclose(file);
+    players[n].gold+=player->gold;
+    players[n].total_score+=player->total_score;
+    players[n].games_completed++;
+
+    FILE *f =fopen(SCORES, "w");
+    for(int i=0; i<count; i++){
+    fprintf(f, "%s %d %d %d %ld\n", players[i].username, players[i].total_score, 
+            players[i].gold, players[i].games_completed, players[i].first_game_time);
+    }
+    fclose(f);
+
+}
+
+void losegame(Player*player){
+    clear();
+    player->total_score=player->gold * 10;
+    attron(COLOR_PAIR(3));
+    move(1, 1);
+    printw("GAME OVER!");
+    move(2, 1);
+    printw("Gold: %d", player->gold);
+    move(3, 1);
+    printw("Total score: %d", player->total_score);
+    attroff(COLOR_PAIR(3));
+
+    FILE *file = fopen(SCORES, "r");
+    
+    Player players[MAX];
+    int count = 0;
+    int n;
+
+    while (fscanf(file, "%s %d %d %d %ld", players[count].username, &players[count].total_score, 
+                  &players[count].gold, &players[count].games_completed, &players[count].first_game_time) != EOF) {
+        count++;
+        if(strcmp(player->username, players[count-1].username)==0){
+           n=count-1;
+        }
+    }
+    fclose(file);
+    players[n].gold+=player->gold;
+    players[n].total_score+=player->total_score;
+    players[n].games_completed++;
+
+    FILE *f =fopen(SCORES, "w");
+    for(int i=0; i<count; i++){
+    fprintf(f, "%s %d %d %d %ld\n", players[i].username, players[i].total_score, 
+            players[i].gold, players[i].games_completed, players[i].first_game_time);
+    }
+    fclose(f);
+
+}
+
+void talismanmenu(Player*player){
+    clear();
+    move(1, 1);
+    printw("TALISMAN MENU\n\n");
+    printw("1. Health: %d\n", player->thealth);
+    printw("2. Damage: %d\n", player->tdamage);
+    printw("3. Speed: %d\n", player->tspeed);
+    printw("Press ENTER to resume the game!");
+    return;
+}
+
+void weapon(Player*player){
+    clear();
+    move(1, 1);
+    printw("WEAPON MENU\n\n");
+    printw("1. Dagger: %d\n", player->dagger);
+    printw("2. Sword: %d\n", player->sword);
+    printw("3. Mace: %d\n", player->mace);
+    printw("4. Normal Arrow: %d\n", player->arrow);
+    printw("5. Magic Wand: %d\n", player->wand);
+    printw("Press ENTER to resume the game!");
+    return;
+}
+
+void foodmenu(Player*player){
+    clear();
+    int choice;
+    move(1, 1);
+    printw("FOOD MENU\n\n");
+    printw("1. Normal Food: %d\n", player->food);
+    printw("2. Magic Food: %d\n", 0);
+    printw("3. Perfect Food: %d\n", 0);
+    printw("4. Rotten Food: %d\n", 0);
+    printw("5. Resume the game\n");
+    printw("Enter your choice.\n");
+    scanw("%d", &choice);
+    switch(choice){
+        case 1:
+            if(player->food>0){
+                player->food--;
+                player->health=10;
+                move(1, WIDTH+2);
+                printw("Messages");
+                move(3, WIDTH+2);
+                attron(COLOR_PAIR(2));
+                printw("Your current health is %d.", player->health);
+                attroff(COLOR_PAIR(2));
+                getch();
+                refresh();
+            }
+            else{
+                move(1, WIDTH+2);
+                printw("Messages");
+                move(3, WIDTH+2);
+                attron(COLOR_PAIR(3));
+                printw("You don't have any normal food!");
+                attroff(COLOR_PAIR(3));
+                getch();
+                refresh();
+            }
+            break;
+        case 2:
+            move(1, WIDTH+2);
+            printw("Messages");
+            move(3, WIDTH+2);
+            attron(COLOR_PAIR(3));
+            printw("You don't have any magic food!");
+            attroff(COLOR_PAIR(3));
+            getch();
+            refresh();
+            break;
+            
+        case 3:
+            move(1, WIDTH+2);
+            printw("Messages");
+            move(3, WIDTH+2);
+            attron(COLOR_PAIR(3));
+            printw("You don't have any perfect food!");
+            attroff(COLOR_PAIR(3));
+            getch();
+            refresh();
+            break;
+        case 4:
+            move(1, WIDTH+2);
+            printw("Messages");
+            move(3, WIDTH+2);
+            attron(COLOR_PAIR(3));
+            printw("You don't have any rotten food!");
+            attroff(COLOR_PAIR(3));
+            getch();
+            refresh();
+            break;
+        case 5:
+            return;
+    }
+}
+
 
 
 void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[], int roomCount, Player*player) {
@@ -645,9 +1455,14 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
                     showFullMap=1;
                 }
                 clear();
-                printMap(map, *playerX, *playerY, rooms);
+                printMap(map, *playerX, *playerY, rooms, roomCount, player);
                 refresh();
                 a=1;
+                break;
+            case 'e':
+            case 'E':
+                foodmenu(player);
+                
                 break;
         }
         if(a){
@@ -655,28 +1470,17 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
             continue;
         }
 
-        if(map[newX][newY]==WALL){
+        if(map[newX][newY]==WALL || map[newX][newY]==PILLAR || map[newX][newY]==WINDOW){
+            continue;
+        }
+        if(map[newX][newY]==EMPTY && (map[*playerX][*playerY]==STAIRCASE || map[*playerX][*playerY]=='>')){
             continue;
         }
 
-        /*if(floors>1 && newX == rooms[0].sdoorX && newY == rooms[0].sdoorY) {
-            rooms[0].sdoorfound = true;
-            map[newX][newY] = DOOR; 
-           *playerX = newX;
-           *playerY = newY;
-            updateVisibility(*playerX, *playerY, rooms, roomCount);
-            clear();
-            printMap(map, *playerX, *playerY, rooms);
-            move(3, WIDTH+2);
-            attron(COLOR_PAIR(2));
-            printw("Secret door discovered!");
-            attroff(COLOR_PAIR(2));
-            refresh();
-            continue;
-        }*/
+        
 
 
-        if(map[newX][newY]==STAIRCASE && (map[*playerX][*playerY]==FLOOR || map[*playerX][*playerY]==TRAP)&&floors<=4){
+        if(map[newX][newY]==STAIRCASE && (map[*playerX][*playerY]==FLOOR || map[*playerX][*playerY]==TRAP)&&floors<4){
             
             clear();
             
@@ -692,37 +1496,217 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
                 }
             }
             trapCounter=0;
+            roomCount=6;
             generateFloor(map, templateRoom, player, rooms);
             map[newX][newY]='>';
-            printMap(map, newX, newY, rooms);
+            while(1){
+                rooms[0].doorX=rooms[0].x + rand() % (rooms[0].width);
+                rooms[0].doorY=rooms[0].y + rand() % (rooms[0].height);
+                if(map[rooms[0].doorX][rooms[0].doorY]==WALL){
+                   map[rooms[0].doorX][rooms[0].doorY]=DOOR;
+                   break;
+                }
+            }
+           
+
+            printMap(map, newX, newY, rooms, 6, player);
             
             move(3, WIDTH+2);
             attron(COLOR_PAIR(2));
+            if(floors==4){
+              printw("Welcome to the %dth floor!", floors);  
+            }
+            else{
             printw("Welcome to the %dnd floor!", floors);
+            }
             attroff(COLOR_PAIR(2));
             refresh();
             continue;
         }
 
-        else if(map[newX][newY]==STAIRCASE && (map[*playerX][*playerY]==FLOOR || map[*playerX][*playerY]==TRAP)&&floors>4){
+        else if(map[newX][newY]==STAIRCASE && (map[*playerX][*playerY]==FLOOR || map[*playerX][*playerY]==TRAP)&&floors>3){
+            move(3, WIDTH+2);
             attron(COLOR_PAIR(3));
             printw("No more floors!");
             attroff(COLOR_PAIR(3));
             continue;
         }
+        if(floors==4){
+            for(int i=0; i<6; i++){
+                if(newX>rooms[i].x && newX<rooms[i].x+rooms[i].width-1 && rooms[i].type==2 && 
+                   newY>rooms[i].y && newY<rooms[i].y+rooms[i].height-1){
+                    winendgame(player);
+                    return;
+                }
+            }
+        }
+        if(map[newX][newY]==GOLD){
+            player->gold++;
+            printMap(map, newX, newY, rooms, roomCount, player);
+        
+            attron(COLOR_PAIR(4));
+            
+            move(3, WIDTH+2);
+            printw("You have %d gold(s) now!", player->gold);
+            attroff(COLOR_PAIR(4));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]=='G'){
+            player->gold+=5;
+            printMap(map, newX, newY, rooms, roomCount, player);
+        
+            attron(COLOR_PAIR(4));
+            
+            move(3, WIDTH+2);
+            printw("WOW...You found a black gold! You have %d gold(s) now!", player->gold);
+            attroff(COLOR_PAIR(4));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+
+        if(map[newX][newY]==HEALTH){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->thealth++;
+            talismanmenu(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more talisman now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]==DAMAGE){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->tdamage++;
+            talismanmenu(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more talisman now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]==SPEED){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->tspeed++;
+            talismanmenu(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more talisman now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]=='M'){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->mace++;
+            weapon(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more weapon now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]=='A'){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->arrow++;
+            weapon(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more weapon now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]=='W'){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->wand++;
+            weapon(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more weapon now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]=='S'){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->sword++;
+            weapon(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more weapon now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]=='D'){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            player->dagger++;
+            weapon(player);
+            move(1, WIDTH+2);
+            printw("Messages");
+            attron(COLOR_PAIR(6));
+            move(3, WIDTH+2);
+            printw("You have one more weapon now!");
+            attroff(COLOR_PAIR(6));
+            map[newX][newY]=FLOOR;
+            continue;
+        }
+        if(map[newX][newY]==FOOD){
+            printMap(map, newX, newY, rooms, roomCount, player);
+            if(player->food <5){
+                player->food++;
+                attron(COLOR_PAIR(2));
+                move(3, WIDTH+2);
+                printw("You have one more food now!");
+                attroff(COLOR_PAIR(2));
+                map[newX][newY]=FLOOR;
+                continue;
+            }
+            else{
+                printMap(map, newX, newY, rooms, roomCount, player);
+                attron(COLOR_PAIR(3));
+                move(3, WIDTH+2);
+                printw("You already have 5 foods...");
+                attroff(COLOR_PAIR(3));
+                continue;
+            }
+        }
+
 
         
-        if ((map[newX][newY] == FLOOR || map[newX][newY] == EMPTY || map[newX][newY] == DOOR || map[newX][newY]==TRAP)&&map[newX][newY]!=WALL) {
+        //if ((map[newX][newY] == FLOOR || map[newX][newY] == EMPTY || map[newX][newY] == DOOR || map[newX][newY]==TRAP)&&map[newX][newY]!=WALL) {
             *playerX = newX;
             *playerY = newY;
             updateVisibility(*playerX, *playerY, rooms, roomCount);
-        }
+        //}
         clear();
         for (int t = 0; t < trapCounter; t++) {
             if (traps[t].x == newX && traps[t].y == newY) {
         
                 traps[t].active = true;
                 player->health --;
+                if(player->health==0){
+                    losegame(player);
+                    return;
+                }
                 move(3, WIDTH+2);
                 attron(COLOR_PAIR(3));
                 printw("Oops! You hit a trap...Your current health is %d.", player->health);
@@ -731,7 +1715,7 @@ void movePlayer(int *playerX, int *playerY, char map[WIDTH][HEIGHT], Room rooms[
         }
 
         
-        printMap(map, newX, newY, rooms);
+        printMap(map, newX, newY, rooms, roomCount, player);
         refresh();
     }
     echo();
@@ -767,7 +1751,7 @@ void New_Game(char level, Player*newplayer){
             visited[i][j]=1;
         }
     }
-    printMap(map, newplayer->x, newplayer->y, rooms);
+    printMap(map, newplayer->x, newplayer->y, rooms, roomCount, newplayer);
     
     
     movePlayer(&newplayer->x, &newplayer->y, map, rooms, roomCount, newplayer);
@@ -824,6 +1808,10 @@ void game_menu(const char* current_user, Player*newplayer){
 void main_menu(char user_name[MAX]){
     Player *newplayer=(Player*)malloc(sizeof(Player));
     newplayer->health=10;
+    newplayer->gold=0;
+    newplayer->thealth=0; newplayer->tspeed=0; newplayer->tdamage=0;
+    newplayer->sword=0; newplayer->dagger=0; newplayer->arrow=0; newplayer->mace=0; newplayer->wand=0;
+    newplayer->food=0;
     int choice;
     do {
         clear();
@@ -860,6 +1848,7 @@ void main_menu(char user_name[MAX]){
 
 int main(){
     char username[MAX];
+    setlocale(LC_ALL, "");
     initscr();
     curs_set(0);
     init_colors();
